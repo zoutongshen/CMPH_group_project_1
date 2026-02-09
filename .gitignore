@@ -38,3 +38,7 @@ Thumbs.db
 
 # OCR text files (keep markdown versions instead)
 *_OCR.txt
+
+# Course materials (keep local only)
+Code_guidelines*.md
+COP_2026_lecture*.md
