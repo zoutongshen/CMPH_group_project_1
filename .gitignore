@@ -1,0 +1,40 @@
+# Data files
+*.npy
+*.dat
+
+# Plots and visualizations
+*.png
+*.jpg
+*.pdf
+*.gif
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environment
+.venv/
+venv/
+ENV/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# OCR text files (keep markdown versions instead)
+*_OCR.txt
