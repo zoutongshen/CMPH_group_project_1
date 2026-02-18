@@ -7,55 +7,84 @@ This project implements a Molecular Dynamics (MD) simulation of Argon atoms usin
 ## Files
 
 - `md_simulation.py`: Main simulation code with MD integration
+- `plot_energies.py`: Script to plot energy evolution and compare time-step effects
 - `visualize.py`: Script to visualize saved trajectories
 - `README.md`: This file
 
 ## How to Run
 
-### Run a simulation:
+### Run a simulation (default: 4 particles, 3D):
 
 ```bash
 python md_simulation.py
 ```
 
-### Parameters to modify (in `md_simulation.py`):
+### Run a collision course (2 particles, head-on):
 
-In the `main()` function, you can adjust:
-- `n_particles`: Number of particles (default: 5)
-- `box_size`: Size of the simulation box (default: 10.0)
-- `n_steps`: Number of time steps (default: 1000)
-- `dt`: Time step size (default: 0.01)
-- `temperature`: Initial temperature (default: 1.0)
-- `dimensions`: 2D or 3D simulation (default: 2)
+```bash
+python md_simulation.py --collision
+```
 
-### Visualize results:
+### Plot energy evolution:
+
+```bash
+python plot_energies.py
+```
+
+This loads `energies.npy` from the most recent simulation and plots kinetic, potential, and total energy vs time.
+
+### Compare time-step effects:
+
+```bash
+python plot_energies.py --compare-dt
+```
+
+Runs simulations with dt = 0.001, 0.004, 0.01, 0.02, 0.05 using the same initial conditions. Shows how Euler integration energy drift increases with larger time steps.
+
+### Plot collision energy exchange:
+
+```bash
+python plot_energies.py --collision
+```
+
+Self-contained: runs a collision course and plots the KE/PE energy exchange during the collision event.
+
+### Visualize trajectories:
 
 ```bash
 python visualize.py
 ```
 
-This will create a scatter plot animation of the particle trajectories.
+Creates a scatter plot (2D) or 3D plot of the particle trajectories.
+
+## Default Parameters
+
+| Parameter    | Default | Collision mode |
+|-------------|---------|----------------|
+| n_particles | 4       | 2              |
+| box_size    | 6       | 10             |
+| n_steps     | 5000    | 10000          |
+| dt          | 0.001   | 0.001          |
+| temperature | 1.0     | N/A            |
+| dimensions  | 3       | 3              |
 
 ## Physics Parameters
 
 **Lennard-Jones potential for Argon:**
-- ε/k_B = 119.8 K
-- σ = 3.405 Å
+- epsilon/k_B = 119.8 K
+- sigma = 3.405 Angstrom
 
-The simulation uses dimensionless units where ε and σ are set to 1.
+The simulation uses dimensionless (reduced) units where epsilon, sigma, and particle mass are all set to 1.
 
 ## Implementation Notes
 
 - Uses Euler integration (simple but doesn't conserve energy - will be improved in later lectures)
 - Periodic boundary conditions with minimum image convention
-- Stores trajectories in `trajectories.npy` file
-- Start with 2D for easier visualization, can switch to 3D by changing `dimensions` parameter
+- Saves trajectories to `trajectories.npy` and energies to `energies.npy`
+- Variables follow the >1 character naming guideline (e.g. `distance` instead of `r`)
 
 ## Next Steps
 
-1. Test with 2 particles on collision course
-2. Gradually increase number of particles
-3. Verify periodic boundaries work correctly
-4. Switch to 3D
-5. Implement better integration scheme (e.g., Velocity Verlet)
-6. Add energy conservation checks
+1. Implement better integration scheme (e.g., Velocity Verlet)
+2. Add energy conservation checks
+3. Explore larger systems and phase behavior

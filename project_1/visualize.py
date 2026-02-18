@@ -175,7 +175,7 @@ def main():
         
     elif dimensions == 3:
         print("Creating 3D trajectory plot...")
-        plot_trajectories_3d(trajectories, show_last_n=1000)
+        plot_trajectories_3d(trajectories, show_last_n=5000)
     else:
         print(f"Error: Cannot visualize {dimensions}D trajectories")
 

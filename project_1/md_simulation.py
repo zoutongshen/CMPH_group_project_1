@@ -4,56 +4,60 @@ Molecular Dynamics Simulation of Argon Atoms
 This module implements a basic MD simulation using the Lennard-Jones potential
 with periodic boundary conditions and the minimum image convention.
 
-Author: COP 2026 Project 1
+Author: CMPH 2026 Project 1
 Date: February 2026
 """
 
+import argparse
 import numpy as np
 from typing import Tuple
 
 
-def lennard_jones_potential(r: float, epsilon: float = 1.0, sigma: float = 1.0) -> float:
+def lennard_jones_potential(distance: float, epsilon: float = 1.0, sigma: float = 1.0) -> float:
     """
     Calculate Lennard-Jones potential energy for a given distance.
-    
+
     U(r) = 4*epsilon*[(sigma/r)^12 - (sigma/r)^6]
-    
+
     Args:
-        r: Distance between two particles
+        distance: Distance between two particles
         epsilon: LJ energy parameter (default: 1.0 in reduced units)
         sigma: LJ length parameter (default: 1.0 in reduced units)
-    
+
     Returns:
-        Potential energy at distance r
+        Potential energy at the given distance
     """
-    sigma_over_r = sigma / r
+    sigma_over_r = sigma / distance
     return 4 * epsilon * (sigma_over_r**12 - sigma_over_r**6)
 
 
-def lennard_jones_force_magnitude(r: float, epsilon: float = 1.0, sigma: float = 1.0) -> float:
+def lennard_jones_force_magnitude(distance: float, epsilon: float = 1.0, sigma: float = 1.0) -> float:
     """
     Calculate magnitude of Lennard-Jones force from the potential.
-    
+
     Force is F = -dU/dr, where U(r) = 4*epsilon*[(sigma/r)^12 - (sigma/r)^6]
     This gives: F = 24*epsilon/r * [2*(sigma/r)^12 - (sigma/r)^6]
-    
+
     Args:
-        r: Distance between two particles
+        distance: Distance between two particles
         epsilon: LJ energy parameter (default: 1.0 in reduced units)
         sigma: LJ length parameter (default: 1.0 in reduced units)
-    
+
     Returns:
-        Magnitude of force at distance r
+        Magnitude of force at the given distance
     """
-    sigma_over_r = sigma / r
-    return 24 * epsilon / r * (2 * sigma_over_r**12 - sigma_over_r**6)
+    sigma_over_r = sigma / distance
+    return 24 * epsilon / distance * (2 * sigma_over_r**12 - sigma_over_r**6)
 
 
 def forces_and_potential(positions: np.ndarray, box_size: float,
                          epsilon: float = 1.0, sigma: float = 1.0) -> Tuple[np.ndarray, float]:
     """
     Compute forces on all particles and total potential energy from Lennard-Jones interactions.
-    
+
+    Both quantities are computed in a single pair-loop over particles, which is
+    standard MD practice since force and potential share the same distance calculation.
+
     Uses the minimum image convention for periodic boundary conditions.
     Forces are derived from the Lennard-Jones potential: F = -dU/dr
     
@@ -81,21 +85,21 @@ def forces_and_potential(positions: np.ndarray, box_size: float,
             delta = delta - box_size * np.round(delta / box_size)
             
             # Calculate distance
-            r = np.linalg.norm(delta)
-            
+            distance = np.linalg.norm(delta)
+
             # Skip if particles are too close (avoid division by zero)
-            if r < 0.01 * sigma:
+            if distance < 0.01 * sigma:
                 continue
-            
+
             # Calculate potential energy for this pair
-            potential = lennard_jones_potential(r, epsilon, sigma)
+            potential = lennard_jones_potential(distance, epsilon, sigma)
             total_potential += potential
-            
+
             # Calculate force magnitude from the potential derivative
-            force_mag = lennard_jones_force_magnitude(r, epsilon, sigma)
-            
+            force_mag = lennard_jones_force_magnitude(distance, epsilon, sigma)
+
             # Force vector (pointing from j to i)
-            force_vector = force_mag * delta / r
+            force_vector = force_mag * delta / distance
             
             # Newton's third law: equal and opposite forces
             forces[i] += force_vector
@@ -181,9 +185,9 @@ def initialize_particles(n_particles: int, box_size: float,
                 delta = new_pos - positions[j]
                 # Apply minimum image convention
                 delta = delta - box_size * np.round(delta / box_size)
-                r = np.linalg.norm(delta)
-                
-                if r < min_distance:
+                distance = np.linalg.norm(delta)
+
+                if distance < min_distance:
                     too_close = True
                     break
             
@@ -206,6 +210,43 @@ def initialize_particles(n_particles: int, box_size: float,
     return positions, velocities
 
 
+def initialize_collision_course(box_size: float, dimensions: int = 3,
+                                separation: float = 3.0, speed: float = 1.0) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Initialize 2 particles on a head-on collision course along the x-axis.
+
+    Particles are placed symmetrically about the box center, moving toward each
+    other with equal and opposite velocities (zero total momentum by construction).
+
+    Args:
+        box_size: Size of the simulation box
+        dimensions: Number of spatial dimensions (2 or 3)
+        separation: Initial distance between particles (default: 3.0 sigma)
+        speed: Speed of each particle (default: 1.0)
+
+    Returns:
+        Tuple of (positions, velocities), each of shape (2, dimensions)
+    """
+    center = box_size / 2.0
+    positions = np.zeros((2, dimensions))
+    velocities = np.zeros((2, dimensions))
+
+    # Place particles along x-axis, centered in box
+    positions[0, 0] = center - separation / 2.0
+    positions[1, 0] = center + separation / 2.0
+
+    # Center other coordinates in box
+    for dim in range(1, dimensions):
+        positions[0, dim] = center
+        positions[1, dim] = center
+
+    # Move toward each other along x-axis
+    velocities[0, 0] = +speed
+    velocities[1, 0] = -speed
+
+    return positions, velocities
+
+
 def kinetic_energy(velocities: np.ndarray, mass: float = 1.0) -> float:
     """
     Total kinetic energy of the system.
@@ -222,32 +263,40 @@ def kinetic_energy(velocities: np.ndarray, mass: float = 1.0) -> float:
     return 0.5 * mass * np.sum(velocities**2)
 
 
-def run_simulation(n_particles: int, box_size: float, n_steps: int, 
-                   dt: float, temperature: float = 1.0, 
-                   dimensions: int = 2, track_energy: bool = True) -> Tuple[np.ndarray, np.ndarray]:
+def run_simulation(n_particles: int, box_size: float, n_steps: int,
+                   dt: float, temperature: float = 1.0,
+                   dimensions: int = 3, track_energy: bool = True,
+                   initial_positions: np.ndarray = None,
+                   initial_velocities: np.ndarray = None) -> Tuple[np.ndarray, np.ndarray]:
     """
     Run molecular dynamics simulation.
-    
+
     Args:
         n_particles: Number of particles to simulate
         box_size: Size of the cubic/square simulation box
         n_steps: Number of time steps to simulate
         dt: Time step size
-        temperature: Initial temperature
+        temperature: Initial temperature (used only when generating random initial conditions)
         dimensions: Number of spatial dimensions (2 or 3)
         track_energy: Whether to track and return energy values
-    
+        initial_positions: Optional pre-set positions of shape (n_particles, dimensions).
+                          If None, positions are randomly initialized.
+        initial_velocities: Optional pre-set velocities of shape (n_particles, dimensions).
+                           If None, velocities are drawn from Maxwell-Boltzmann distribution.
+
     Returns:
-        If track_energy is True:
-            Tuple of (trajectories, energies)
-            - trajectories: Array of shape (n_steps, n_particles, dimensions)
-            - energies: Array of shape (n_steps, 3) with [KE, PE, Total] for each step
-        If track_energy is False:
-            Just trajectories array
+        Tuple of (trajectories, energies)
+        - trajectories: Array of shape (n_steps, n_particles, dimensions)
+        - energies: Array of shape (n_steps, 3) with [KE, PE, Total] for each step,
+                    or None if track_energy is False
     """
-    # Initialize with minimum distance of 1.5*sigma to avoid strong initial forces
-    positions, velocities = initialize_particles(n_particles, box_size, temperature, 
-                                                dimensions, min_distance=1.5)
+    if initial_positions is not None and initial_velocities is not None:
+        positions = initial_positions.copy()
+        velocities = initial_velocities.copy()
+    else:
+        # Initialize with minimum distance of 1.5*sigma to avoid strong initial forces
+        positions, velocities = initialize_particles(n_particles, box_size, temperature,
+                                                    dimensions, min_distance=1.5)
     
     # Storage for trajectories and energies
     trajectories = np.zeros((n_steps, n_particles, dimensions))
@@ -288,33 +337,61 @@ def run_simulation(n_particles: int, box_size: float, n_steps: int,
 def main():
     """
     Main function to run the simulation.
-    
-    Modify parameters here to explore different conditions.
+
+    Use --collision flag for a 2-particle collision course scenario.
+    Otherwise runs a default 3D simulation with 4 particles.
     """
-    # Simulation parameters
-    n_particles = 2
-    box_size = 4
-    n_steps = 1000  # Need ~100-1000 steps to see clear trajectories
-    dt = 0.001  # Small timestep needed for Euler stability (Euler is not energy-conserving!)
-    temperature = 1.0
-    dimensions = 2  # Start with 2D for visualization
-    
-    print("Starting MD simulation...")
-    print(f"Parameters: {n_particles} particles, box size {box_size}")
-    print(f"Time steps: {n_steps}, dt = {dt}")
-    print(f"Initial temperature: {temperature}")
-    print(f"Dimensions: {dimensions}D")
-    print()
-    
-    # Run simulation with energy tracking
-    trajectories, energies = run_simulation(n_particles, box_size, n_steps, dt, 
-                                           temperature, dimensions, track_energy=True)
-    
+    parser = argparse.ArgumentParser(description="Molecular Dynamics Simulation")
+    parser.add_argument("--collision", action="store_true",
+                        help="Run 2-particle collision course scenario")
+    args = parser.parse_args()
+
+    if args.collision:
+        # Collision course scenario
+        n_particles = 2
+        box_size = 10
+        n_steps = 10000
+        dt = 0.001
+        dimensions = 3
+
+        positions, velocities = initialize_collision_course(box_size, dimensions)
+
+        print("Starting MD simulation (collision course)...")
+        print(f"Parameters: {n_particles} particles, box size {box_size}")
+        print(f"Time steps: {n_steps}, dt = {dt}")
+        print(f"Dimensions: {dimensions}D")
+        print(f"Initial separation: 3.0 sigma, speed: 1.0")
+        print()
+
+        trajectories, energies = run_simulation(
+            n_particles, box_size, n_steps, dt,
+            dimensions=dimensions, track_energy=True,
+            initial_positions=positions, initial_velocities=velocities)
+    else:
+        # Default simulation parameters
+        n_particles = 4
+        box_size = 6
+        n_steps = 5000
+        dt = 0.001
+        temperature = 1.0
+        dimensions = 3
+
+        print("Starting MD simulation...")
+        print(f"Parameters: {n_particles} particles, box size {box_size}")
+        print(f"Time steps: {n_steps}, dt = {dt}")
+        print(f"Initial temperature: {temperature}")
+        print(f"Dimensions: {dimensions}D")
+        print()
+
+        trajectories, energies = run_simulation(
+            n_particles, box_size, n_steps, dt,
+            temperature, dimensions, track_energy=True)
+
     # Save trajectories and energies
     np.save('trajectories.npy', trajectories)
     if energies is not None:
         np.save('energies.npy', energies)
-    
+
     print()
     print(f"Simulation complete!")
     print(f"Trajectories saved to 'trajectories.npy' with shape: {trajectories.shape}")
@@ -322,6 +399,7 @@ def main():
         print(f"Energies saved to 'energies.npy' with shape: {energies.shape}")
         print(f"Final energy - KE: {energies[-1, 0]:.3f}, PE: {energies[-1, 1]:.3f}, Total: {energies[-1, 2]:.3f}")
     print("Run 'python visualize.py' to visualize the results.")
+    print("Run 'python plot_energies.py' to plot energy evolution.")
 
 
 if __name__ == "__main__":
