@@ -115,7 +115,7 @@ def create_animation_2d(trajectories: np.ndarray, box_size: float = 10.0,
     
     # Initialize scatter plot
     colors = plt.cm.rainbow(np.linspace(0, 1, n_particles))
-    scat = ax.scatter([], [], s=200, c=colors, edgecolors='black', linewidth=2)
+    scat = ax.scatter(trajectories[0, :, 0], trajectories[0, :, 1], s=200, c=colors, edgecolors='black', linewidth=2)
     time_text = ax.text(0.02, 0.98, '', transform=ax.transAxes, 
                        verticalalignment='top', fontsize=12,
                        bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
@@ -170,8 +170,8 @@ def main():
         plot_trajectories_2d(trajectories, show_last_n=1000)
         
         # Optionally create animation (commented out by default as it can be slow)
-        # print("Creating animation...")
-        # create_animation_2d(trajectories, box_size=10.0, interval=20, skip_frames=10)
+        print("Creating animation...")
+        create_animation_2d(trajectories, box_size=10.0, interval=20, skip_frames=10)
         
     elif dimensions == 3:
         print("Creating 3D trajectory plot...")

@@ -82,7 +82,8 @@ def forces_and_potential(positions: np.ndarray, box_size: float,
             delta = positions[i] - positions[j]
             
             # Apply minimum image convention: wrap to nearest image
-            delta = delta - box_size * np.round(delta / box_size)
+            # delta = delta - box_size * np.round(delta / box_size)
+            delta = (delta + box_size / 2) % box_size - box_size / 2
             
             # Calculate distance
             distance = np.linalg.norm(delta)
@@ -124,15 +125,14 @@ def apply_periodic_boundaries(positions: np.ndarray, box_size: float) -> np.ndar
     return positions % box_size
 
 
-def euler_step(positions: np.ndarray, velocities: np.ndarray, 
-               forces: np.ndarray, dt: float, mass: float = 1.0) -> Tuple[np.ndarray, np.ndarray]:
+def verlet_step(positions: np.ndarray, velocities: np.ndarray, 
+               forces: np.ndarray, box_size: float, dt: float, mass: float = 1.0) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Perform one Euler integration step.
+    Perform one Verlet integration step.
     
-    Updates positions and velocities using the Euler method:
-    x(t+dt) = x(t) + v(t)*dt
-    v(t+dt) = v(t) + F(t)/m*dt
-    
+    Updates positions and velocities using the Verlet method:
+    x(t+dt) = x(t) + v(t)*dt + 0.5 * F(t)/m * dt**2
+    v(t+dt) = v(t) + 0.5 * (F(t) + F(t+dt))/m * dt
     Args:
         positions: Current positions
         velocities: Current velocities
@@ -143,8 +143,9 @@ def euler_step(positions: np.ndarray, velocities: np.ndarray,
     Returns:
         Tuple of (new_positions, new_velocities)
     """
-    new_positions = positions + velocities * dt
-    new_velocities = velocities + forces / mass * dt
+    new_positions = positions + velocities * dt + 0.5 * forces / mass * dt**2
+    new_forces = forces_and_potential(new_positions, box_size)[0]  # Get new forces at updated positions
+    new_velocities = velocities + 0.5 * ( forces + new_forces ) / mass * dt
     
     return new_positions, new_velocities
 
@@ -210,7 +211,7 @@ def initialize_particles(n_particles: int, box_size: float,
     return positions, velocities
 
 
-def initialize_collision_course(box_size: float, dimensions: int = 3,
+def initialize_collision_course(box_size: float, dimensions: int = 2,
                                 separation: float = 3.0, speed: float = 1.0) -> Tuple[np.ndarray, np.ndarray]:
     """
     Initialize 2 particles on a head-on collision course along the x-axis.
@@ -265,7 +266,7 @@ def kinetic_energy(velocities: np.ndarray, mass: float = 1.0) -> float:
 
 def run_simulation(n_particles: int, box_size: float, n_steps: int,
                    dt: float, temperature: float = 1.0,
-                   dimensions: int = 3, track_energy: bool = True,
+                   dimensions: int = 2, track_energy: bool = True,
                    initial_positions: np.ndarray = None,
                    initial_velocities: np.ndarray = None) -> Tuple[np.ndarray, np.ndarray]:
     """
@@ -316,8 +317,8 @@ def run_simulation(n_particles: int, box_size: float, n_steps: int,
             ke = kinetic_energy(velocities)
             energies[step] = [ke, potential_energy, ke + potential_energy]
         
-        # Integrate equations of motion (Euler method)
-        positions, velocities = euler_step(positions, velocities, forces, dt)
+        # Integrate equations of motion (Verlet method)
+        positions, velocities = verlet_step(positions, velocities, forces, box_size, dt)
         
         # Apply periodic boundary conditions
         positions = apply_periodic_boundaries(positions, box_size)
@@ -352,7 +353,7 @@ def main():
         box_size = 10
         n_steps = 10000
         dt = 0.001
-        dimensions = 3
+        dimensions = 2
 
         positions, velocities = initialize_collision_course(box_size, dimensions)
 
@@ -369,12 +370,12 @@ def main():
             initial_positions=positions, initial_velocities=velocities)
     else:
         # Default simulation parameters
-        n_particles = 4
-        box_size = 6
+        n_particles = 10
+        box_size = 10
         n_steps = 5000
         dt = 0.001
         temperature = 1.0
-        dimensions = 3
+        dimensions = 2
 
         print("Starting MD simulation...")
         print(f"Parameters: {n_particles} particles, box size {box_size}")
