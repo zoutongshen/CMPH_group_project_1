@@ -1,8 +1,9 @@
 """
 Molecular Dynamics Simulation of Argon Atoms
 
-This module implements a basic MD simulation using the Lennard-Jones potential
-with periodic boundary conditions and the minimum image convention.
+This module implements an MD simulation using the Lennard-Jones potential
+with periodic boundary conditions, the minimum image convention, and the
+Velocity-Verlet integration algorithm for energy conservation.
 
 Author: CMPH 2026 Project 1
 Date: February 2026
@@ -81,8 +82,8 @@ def forces_and_potential(positions: np.ndarray, box_size: float,
             # Calculate distance vector with minimum image convention
             delta = positions[i] - positions[j]
             
-            # Apply minimum image convention: wrap to nearest image
-            delta = delta - box_size * np.round(delta / box_size)
+            # Apply minimum image convention using modulo trick
+            delta = (delta + box_size / 2) % box_size - box_size / 2
             
             # Calculate distance
             distance = np.linalg.norm(delta)
@@ -124,29 +125,46 @@ def apply_periodic_boundaries(positions: np.ndarray, box_size: float) -> np.ndar
     return positions % box_size
 
 
-def euler_step(positions: np.ndarray, velocities: np.ndarray, 
-               forces: np.ndarray, dt: float, mass: float = 1.0) -> Tuple[np.ndarray, np.ndarray]:
+def velocity_verlet_positions(positions: np.ndarray, velocities: np.ndarray,
+                              forces: np.ndarray, dt: float,
+                              mass: float = 1.0) -> np.ndarray:
     """
-    Perform one Euler integration step.
-    
-    Updates positions and velocities using the Euler method:
-    x(t+dt) = x(t) + v(t)*dt
-    v(t+dt) = v(t) + F(t)/m*dt
-    
+    Velocity Verlet position update (first half of the algorithm).
+
+    x(t+dt) = x(t) + v(t)*dt + dt^2/(2m) * F(t)
+
     Args:
         positions: Current positions
         velocities: Current velocities
-        forces: Current forces
+        forces: Current forces on all particles
         dt: Time step
         mass: Particle mass (default: 1.0 in reduced units)
-    
+
     Returns:
-        Tuple of (new_positions, new_velocities)
+        Updated positions at time t+dt
     """
-    new_positions = positions + velocities * dt
-    new_velocities = velocities + forces / mass * dt
-    
-    return new_positions, new_velocities
+    return positions + velocities * dt + 0.5 * forces / mass * dt**2
+
+
+def velocity_verlet_velocities(velocities: np.ndarray, forces_old: np.ndarray,
+                               forces_new: np.ndarray, dt: float,
+                               mass: float = 1.0) -> np.ndarray:
+    """
+    Velocity Verlet velocity update (second half of the algorithm).
+
+    v(t+dt) = v(t) + dt/(2m) * [F(t) + F(t+dt)]
+
+    Args:
+        velocities: Current velocities
+        forces_old: Forces at time t
+        forces_new: Forces at time t+dt (computed from updated positions)
+        dt: Time step
+        mass: Particle mass (default: 1.0 in reduced units)
+
+    Returns:
+        Updated velocities at time t+dt
+    """
+    return velocities + 0.5 * dt / mass * (forces_old + forces_new)
 
 
 def initialize_particles(n_particles: int, box_size: float, 
@@ -183,8 +201,8 @@ def initialize_particles(n_particles: int, box_size: float,
             too_close = False
             for j in range(i):
                 delta = new_pos - positions[j]
-                # Apply minimum image convention
-                delta = delta - box_size * np.round(delta / box_size)
+                # Apply minimum image convention using modulo trick
+                delta = (delta + box_size / 2) % box_size - box_size / 2
                 distance = np.linalg.norm(delta)
 
                 if distance < min_distance:
@@ -303,25 +321,34 @@ def run_simulation(n_particles: int, box_size: float, n_steps: int,
     if track_energy:
         energies = np.zeros((n_steps, 3))  # [kinetic, potential, total]
     
-    # Main simulation loop
+    # Compute initial forces for the Velocity-Verlet algorithm
+    forces, potential_energy = forces_and_potential(positions, box_size)
+
+    # Main simulation loop (Velocity-Verlet integration)
     for step in range(n_steps):
         # Store current positions
         trajectories[step] = positions
-        
-        # Get forces and potential energy
-        forces, potential_energy = forces_and_potential(positions, box_size)
-        
+
         # Track energies if requested
         if track_energy:
             ke = kinetic_energy(velocities)
             energies[step] = [ke, potential_energy, ke + potential_energy]
-        
-        # Integrate equations of motion (Euler method)
-        positions, velocities = euler_step(positions, velocities, forces, dt)
-        
+
+        # Step 1: Update positions
+        positions = velocity_verlet_positions(positions, velocities, forces, dt)
+
         # Apply periodic boundary conditions
         positions = apply_periodic_boundaries(positions, box_size)
-        
+
+        # Step 2: Compute new forces at the updated positions
+        forces_new, potential_energy = forces_and_potential(positions, box_size)
+
+        # Step 3: Update velocities using old and new forces
+        velocities = velocity_verlet_velocities(velocities, forces, forces_new, dt)
+
+        # Store new forces for next step
+        forces = forces_new
+
         # Print progress every 100 steps
         if (step + 1) % 100 == 0:
             if track_energy:
@@ -369,7 +396,7 @@ def main():
             initial_positions=positions, initial_velocities=velocities)
     else:
         # Default simulation parameters
-        n_particles = 4
+        n_particles = 15
         box_size = 6
         n_steps = 5000
         dt = 0.001
