@@ -185,7 +185,7 @@ def initialize_particles(n_particles: int, box_size: float,
             for j in range(i):
                 delta = new_pos - positions[j]
                 # Apply minimum image convention
-                delta = delta - box_size * np.round(delta / box_size)
+                delta = (delta + box_size / 2) % box_size - box_size / 2
                 distance = np.linalg.norm(delta)
 
                 if distance < min_distance:
@@ -370,7 +370,7 @@ def main():
             initial_positions=positions, initial_velocities=velocities)
     else:
         # Default simulation parameters
-        n_particles = 10
+        n_particles = 15
         box_size = 10
         n_steps = 5000
         dt = 0.001

@@ -142,6 +142,9 @@ def create_animation_2d(trajectories: np.ndarray, box_size: float = 10.0,
     plt.title('MD Simulation Animation')
     plt.tight_layout()
     plt.show()
+
+    print("Saving animation to 'md_simulation.gif' ...")
+    anim.save('md_simulation.gif', writer='pillow', fps=30)
     
     return anim
 
